@@ -29,6 +29,9 @@ export const WORDS: WordEntry[] = [
   { answer: 'gundruk', difficulty: 4, category: 'Khana', hint: 'Fermented sag' },
   { answer: 'khukuri', difficulty: 4, category: 'Prakriti', hint: 'Gorkha ko hathiyar' },
   { answer: 'yatri', difficulty: 4, category: 'Yatra', hint: 'Trek garne manche' },
+  { answer: 'khumbu', difficulty: 4, category: 'Thau', hint: 'Sagarmatha ko tala ko Sherpa ilaka' },
+  { answer: 'gurans', difficulty: 4, category: 'Prakriti', hint: 'Rastriya phool, lali ranga' },
+  { answer: 'chhurpi', difficulty: 4, category: 'Khana', hint: 'Chauri ko dudh bata banne kada' },
 ];
 
 /**

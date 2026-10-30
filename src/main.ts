@@ -6,6 +6,7 @@ import { renderNav, type Tab } from './game/nav';
 import { mountGame, type GameOptions } from './game/ui';
 import { facebookAdapter } from './platform/facebook';
 import { mockAdapter } from './platform/mock';
+import { applyTheme } from './game/theme';
 import { loadProfile, recordDaily, saveProfile } from './state/profile';
 
 async function boot(): Promise<void> {
@@ -23,12 +24,13 @@ async function boot(): Promise<void> {
   // First screen: Yatra level map
   function showMap(): void {
     stop();
-    renderMap(root, profile, playLevel);
+    dispose = renderMap(root, profile, playLevel); // map ले scroll anusar theme afai badlinchha
     renderNav(root, 'yatra', goTab);
   }
 
   function showKhel(): void {
     stop();
+    applyTheme(null);
     renderHome(root, platform, profile, {
       onDaily: () => playSimple('daily', 0),
       onPractice: (f) => playSimple('practice', f),
@@ -40,6 +42,7 @@ async function boot(): Promise<void> {
     stop();
     const ch = CHAPTERS[chapterOf(i)]!;
     const firstClear = (profile.levels[i] ?? 0) === 0;
+    applyTheme(chapterOf(i), true); // thau ko accent + mathi ko background
     dispose = mountGame(root, platform, {
       mode: 'level',
       filter: 0,
@@ -59,6 +62,7 @@ async function boot(): Promise<void> {
 
   function playSimple(mode: GameOptions['mode'], filter: Filter): void {
     stop();
+    applyTheme(null);
     dispose = mountGame(root, platform, {
       mode,
       filter,

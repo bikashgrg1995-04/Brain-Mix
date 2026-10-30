@@ -34,6 +34,7 @@ const ICONS: Record<IconKey, string> = {
   mountain: '<path d="M3 56l21-36 10 17 8-11 19 30z"/><path d="M24 20l6 10-6-3-5 3z" fill="var(--bg)"/>',
   flags: flags(),
   peak: '<path d="M3 58l29-48 29 48z"/><path d="M32 10l9 15-9-4-9 4z" fill="var(--bg)"/><path d="M32 10V2" stroke="currentColor" stroke-width="2"/><path d="M32 2h9l-3 3.5 3 3.5h-9z" fill="#b8322a"/>',
+  paddy: '<path d="M26 60C26 42 30 24 46 6" stroke="currentColor" stroke-width="3.2" fill="none" stroke-linecap="round"/><ellipse cx="44" cy="12" rx="3" ry="6" transform="rotate(35 44 12)"/><ellipse cx="38" cy="19" rx="3" ry="6" transform="rotate(20 38 19)"/><ellipse cx="33" cy="27" rx="3" ry="6" transform="rotate(10 33 27)"/><ellipse cx="53" cy="16" rx="3" ry="6" transform="rotate(55 53 16)"/><ellipse cx="49" cy="24" rx="3" ry="6" transform="rotate(45 49 24)"/><path d="M26 58C16 54 10 46 8 36c10 2 16 10 18 22z" opacity=".75"/><path d="M27 52c8-4 14-4 22-1-6 5-14 6-22 1z" opacity=".6"/>',
 };
 
 export const icon = (key: IconKey, size = 28): string =>
