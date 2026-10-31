@@ -14,6 +14,7 @@ export interface GameOptions {
   mode: 'practice' | 'daily' | 'level';
   filter: Filter;
   target?: WordEntry; // daily ma fixed
+  timer?: number; // second; samay sakiyo bhane haar (level ma matra)
   level?: { index: number; label: string; hint: 'full' | 'category' | 'none'; firstClear: boolean };
   onNext?: () => void;
   onExit(): void;
@@ -21,6 +22,10 @@ export interface GameOptions {
 }
 
 export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: GameOptions): () => void {
+  let deadline = opt.timer ? Date.now() + opt.timer * 1000 : 0;
+  let tick = 0;
+  const left = (): number => (deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0);
+  const clock = (s: number): string => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   let last = ''; // st banda aagadi (pick() le use garchha)
   const daily = opt.mode === 'daily';
   const lv = opt.level;
@@ -48,6 +53,7 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
     st.target = fixed ? st.target : pick();
     st.maxTries = DIFFICULTY[st.target.difficulty].maxTries;
     Object.assign(st, { guesses: [], results: [], current: '', over: false, won: false, keyState: {}, message: '' });
+    if (opt.timer) deadline = Date.now() + opt.timer * 1000;
     render();
   }
 
@@ -137,7 +143,7 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
         <header class="gbar">
           <button id="back" class="icon" aria-label="Home">←</button>
           <div class="gtitle"><b>${title}</b><span>${sub}</span></div>
-          <span class="pill">${st.guesses.length}/${st.maxTries}</span>
+          <span class="pill">${opt.timer ? `<span class="timer ${left() <= 10 ? 'low' : ''}" role="timer">${clock(left())}</span> · ` : ''}${st.guesses.length}/${st.maxTries}</span>
         </header>
         ${clue}
         <main class="board" style="--cols:${len}">${rows.join('')}</main>
@@ -162,8 +168,22 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
     else if (/^[a-zA-Z]$/.test(e.key)) press(e.key.toLowerCase());
   };
   window.addEventListener('keydown', onKey);
+  if (opt.timer) {
+    tick = window.setInterval(() => {
+      if (st.over) return;
+      const l = left();
+      const el = root.querySelector('.timer');
+      if (el) { el.textContent = clock(l); el.classList.toggle('low', l <= 10); }
+      if (l <= 0) {
+        st.over = true;
+        st.message = `Samay sakiyo. Shabda thiyo: ${st.target.answer}`;
+        opt.onFinish({ won: false, tries: st.guesses.length, xp: 0 });
+        render();
+      }
+    }, 250);
+  }
 
   st.maxTries = DIFFICULTY[st.target.difficulty].maxTries;
   render();
-  return () => window.removeEventListener('keydown', onKey);
+  return () => { window.removeEventListener('keydown', onKey); window.clearInterval(tick); };
 }

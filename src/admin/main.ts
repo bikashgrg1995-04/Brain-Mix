@@ -127,7 +127,6 @@ function warningsFor(): string[] {
       .map(([l]) => l);
     if (answer && others.length > 0) w.push(`"${answer}" Level ${others.join(', ')} ma pani chha.`);
   }
-  if (form.type !== 'word') w.push('Yo type ko game screen abhai bani sakeko chhaina: game le yo level ma auto shabda dekhaucha. Quest save huncha.');
   return w;
 }
 

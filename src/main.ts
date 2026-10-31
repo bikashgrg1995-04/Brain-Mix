@@ -1,8 +1,10 @@
 import './styles.css';
-import { CHAPTERS, TOTAL_LEVELS, chapterOf, levelWord, starsFor } from './game/chapters';
+import { CHAPTERS, TOTAL_LEVELS, chapterOf, starsFor } from './game/chapters';
 import { dailyWord, renderHome, type Filter } from './game/home';
 import { renderMap } from './game/map';
 import { renderNav, type Tab } from './game/nav';
+import { mountRound } from './game/round-ui';
+import { pickRound } from './game/rounds';
 import { mountGame, type GameOptions } from './game/ui';
 import { facebookAdapter } from './platform/facebook';
 import { mockAdapter } from './platform/mock';
@@ -38,25 +40,40 @@ async function boot(): Promise<void> {
     renderNav(root, 'khel', goTab);
   }
 
-  function playLevel(i: number): void {
+  function playLevel(i: number, avoid?: string): void {
     stop();
     const ch = CHAPTERS[chapterOf(i)]!;
     const firstClear = (profile.levels[i] ?? 0) === 0;
+    const round = pickRound(i, Math.random, undefined, avoid); // random type, ya admin ne set gareko
     applyTheme(chapterOf(i), true); // thau ko accent + mathi ko background
-    dispose = mountGame(root, platform, {
-      mode: 'level',
-      filter: 0,
-      target: levelWord(i),
-      level: { index: i, label: ch.place, hint: ch.hint, firstClear },
-      onNext: i + 1 < TOTAL_LEVELS ? () => playLevel(i + 1) : undefined,
+    const done = (stars: number, xp: number): void => {
+      profile.levels[i] = Math.max(profile.levels[i] ?? 0, stars);
+      profile.xp += xp;
+      saveProfile(profile);
+    };
+    const onNext = i + 1 < TOTAL_LEVELS ? () => playLevel(i + 1) : undefined;
+    if (round.kind === 'grid') {
+      dispose = mountGame(root, platform, {
+        mode: 'level',
+        filter: 0,
+        target: round.word,
+        timer: round.timer,
+        level: { index: i, label: ch.place, hint: ch.hint, firstClear },
+        onNext,
+        onExit: showMap,
+        onFinish: ({ won, tries, xp }) => { if (won) done(starsFor(tries), xp); },
+      });
+      return;
+    }
+    dispose = mountRound(root, round, {
+      title: `Level ${i + 1}`,
+      place: ch.place,
+      hint: ch.hint,
+      firstClear,
+      onRetry: () => playLevel(i, round.id),
+      onNext,
       onExit: showMap,
-      onFinish: ({ won, tries, xp }) => {
-        if (won) {
-          profile.levels[i] = Math.max(profile.levels[i] ?? 0, starsFor(tries));
-          profile.xp += xp;
-          saveProfile(profile);
-        }
-      },
+      onFinish: ({ won, stars, xp }) => { if (won) done(stars, xp); },
     });
   }
 
