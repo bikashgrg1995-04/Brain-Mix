@@ -35,13 +35,13 @@ export function awardBadges(p: Profile, today: string = nepalDay().key): Badge[]
 
 export const badgeCount = (p: Profile): string => `${BADGES.filter((b) => p.badges[b.id]).length}/${BADGES.length}`;
 
-export function todayReward(p: Profile): DailyView {
-  return dailyView(p.reward, nepalDay().key, nepalDay(-1).key);
+export function todayReward(p: Profile, now: number = Date.now()): DailyView {
+  return dailyView(p.reward, nepalDay(0, now).key, nepalDay(-1, now).key);
 }
 
 /** Aaja ko inam linchha. Pahilai liyeko bhae null. */
-export function claimReward(p: Profile): { coins: number; day: number } | null {
-  const r = claimDaily(p.reward, nepalDay().key, nepalDay(-1).key);
+export function claimReward(p: Profile, now: number = Date.now()): { coins: number; day: number } | null {
+  const r = claimDaily(p.reward, nepalDay(0, now).key, nepalDay(-1, now).key);
   if (!r) return null;
   p.reward = r.state;
   p.coins += r.coins;

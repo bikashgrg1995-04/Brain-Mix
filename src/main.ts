@@ -17,6 +17,10 @@ import { applyTheme, onPlaceChange } from './game/theme';
 import { loadProfile, recordDaily, saveProfile } from './state/profile';
 import { awardBadges, badgeCount, recordMultiplayer, recordPowerup, recordWin } from './state/progress';
 import { play } from './audio/sfx';
+import { BADGES } from '../shared/achievements';
+import { MP_KEY, MP_URL, mpEnabled } from './mp/config';
+import { supabaseRemote } from './state/remote';
+import { Sync } from './state/sync';
 import { confetti } from './game/fx';
 
 async function boot(): Promise<void> {
@@ -37,8 +41,25 @@ async function boot(): Promise<void> {
   let dispose: (() => void) | null = null;
   const stop = (): void => { dispose?.(); dispose = null; };
 
+  // Server (Supabase) bhaye: coin/XP/badge/inam ko hisab server ko. Natra purano jastai local.
+  const sync: Sync | null = mpEnabled
+    ? new Sync(profile, supabaseRemote(MP_URL, MP_KEY), {
+        onUpdate: (g) => {
+          saveProfile(profile);
+          showMapPills();
+          const got = (g?.badges ?? []).map((id) => BADGES.find((b) => b.id === id)).filter((b) => !!b);
+          if (!got.length) return;
+          play('win');
+          confetti(document.body, 22);
+          got.forEach((b, i) => window.setTimeout(() => toast(`${b!.icon} <b>${b!.name}</b> unlock! +${b!.reward} 🪙`, 3600), i * 700));
+        },
+        onWarn: (m) => toast(m, 4000),
+      })
+    : null;
+
   /** Event pachhi badge check: naya unlock bhaye toast + awaj + coin inam. */
   function checkBadges(): void {
+    if (sync) return; // server le badge dinchha
     const got = awardBadges(profile);
     if (!got.length) return;
     saveProfile(profile);
@@ -55,7 +76,7 @@ async function boot(): Promise<void> {
     dispose = renderMap(root, profile, playLevel, {
       badgeText: badgeCount(profile),
       onBadges: showBadges,
-      mountDaily: (el) => mountDaily(el, profile, () => { checkBadges(); showMapPills(); }),
+      mountDaily: (el) => mountDaily(el, profile, () => { sync?.push({ a: 'daily' }); checkBadges(); showMapPills(); }),
     }); // map ले scroll anusar theme afai badlinchha
     renderNav(root, 'yatra', goTab, sound);
   }
@@ -76,7 +97,7 @@ async function boot(): Promise<void> {
   function showMulti(): void {
     stop();
     applyTheme(null);
-    dispose = renderMultiplayer(root, { platform, onExit: showMap, onGameEnd: (won) => { recordMultiplayer(profile, won); saveProfile(profile); checkBadges(); } });
+    dispose = renderMultiplayer(root, { platform, onExit: showMap, onGameEnd: (won) => { recordMultiplayer(profile, won); saveProfile(profile); sync?.push({ a: 'mp', won }); checkBadges(); } });
     renderNav(root, 'multi', goTab, sound);
   }
 
@@ -96,13 +117,24 @@ async function boot(): Promise<void> {
     const firstClear = (profile.levels[i] ?? 0) === 0;
     const round = pickRound(i, Math.random, undefined, avoid); // random type, ya admin ne set gareko
     applyTheme(chapterOf(i), true); // thau ko accent + mathi ko background
-    const wallet = { coins: () => profile.coins, spend: (n: number) => { if (profile.coins < n) return false; profile.coins -= n; recordPowerup(profile); saveProfile(profile); return true; } };
-    const done = (stars: number, xp: number, coins: number, kind: 'grid' | 'quiz' | 'photo' | 'rush'): void => {
+    const wallet = {
+      coins: () => profile.coins,
+      spend: (item: 'hint' | 'fifty' | 'time', n: number, difficulty: number) => {
+        if (profile.coins < n) return false;
+        profile.coins -= n;
+        recordPowerup(profile);
+        saveProfile(profile);
+        sync?.push({ a: 'spend', item, level: i, difficulty });
+        return true;
+      },
+    };
+    const done = (stars: number, xp: number, coins: number, kind: 'grid' | 'quiz' | 'photo' | 'rush', tries?: number): void => {
       profile.levels[i] = Math.max(profile.levels[i] ?? 0, stars);
       profile.xp += xp;
       profile.coins += coins;
       recordWin(profile, kind, stars);
       saveProfile(profile);
+      sync?.push(kind === 'grid' ? { a: 'complete', level: i, kind, tries } : { a: 'complete', level: i, kind, stars });
       checkBadges();
     };
     const onNext = i + 1 < TOTAL_LEVELS ? () => playLevel(i + 1) : undefined;
@@ -116,7 +148,7 @@ async function boot(): Promise<void> {
         onNext,
         onExit: showMap,
         wallet,
-        onFinish: ({ won, tries, xp, coins }) => { if (won) done(starsFor(tries), xp, coins, 'grid'); },
+        onFinish: ({ won, tries, xp, coins }) => { if (won) done(starsFor(tries), xp, coins, 'grid', tries); },
       });
       return;
     }
@@ -145,12 +177,14 @@ async function boot(): Promise<void> {
         profile.xp += xp;
         if (mode === 'daily') recordDaily(profile, tries, won);
         saveProfile(profile);
+        if (mode === 'daily') sync?.push({ a: 'dailyWord', tries, won });
         checkBadges();
       },
     });
   }
 
   showMap();
+  sync?.start();
 }
 
 boot().catch((err) => {

@@ -146,7 +146,7 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
   const hCost = hintCost(round.difficulty);
   function powerTime(): void {
     if (over || !opt.wallet) return;
-    if (!opt.wallet.spend(TIME_COST)) { message = 'Coin pugena'; play('bad'); return render(); }
+    if (!opt.wallet.spend('time', TIME_COST, round.difficulty)) { message = 'Coin pugena'; play('bad'); return render(); }
     timer.extend(TIME_BONUS_SEC);
     message = `+${TIME_BONUS_SEC} second`; play('coin'); render();
   }
@@ -154,14 +154,14 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
     if (over || !opt.wallet) return;
     if (round.kind === 'quiz') {
       if (gone.length) return;
-      if (!opt.wallet.spend(hCost)) { message = 'Coin pugena'; play('bad'); return render(); }
+      if (!opt.wallet.spend('fifty', hCost, round.difficulty)) { message = 'Coin pugena'; play('bad'); return render(); }
       gone = fiftyFifty(round.options.length, round.correct);
       message = '2 galat option hatayo'; play('coin'); return render();
     }
     const answer = round.kind === 'photo' ? round.answer : round.words[wordIdx]!.answer;
     const pos = revealPosition(answer, new Set(), new Set(hinted.keys()));
     if (pos === null) return;
-    if (!opt.wallet.spend(hCost)) { message = 'Coin pugena'; play('bad'); return render(); }
+    if (!opt.wallet.spend('hint', hCost, round.difficulty)) { message = 'Coin pugena'; play('bad'); return render(); }
     hinted.set(pos, answer[pos]!);
     message = `${pos + 1} ko akshar: ${answer[pos]!.toUpperCase()}`; play('coin'); render();
   }

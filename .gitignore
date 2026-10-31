@@ -3,3 +3,6 @@ dist
 *.zip
 .env.local
 .env.*.local
+supabase/functions/game/game.js
+supabase/.temp
+supabase/.branches

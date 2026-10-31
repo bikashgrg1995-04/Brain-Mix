@@ -97,5 +97,12 @@ Supabase **Realtime** matra: table, SQL, login kehi chahidaina.
 - **Daily inam**: map ko mathi ma card. Roj ek patak linus: 7 din ko cycle, 🪙 10, 15, 20, 25, 30, 40, 60. Ek din chhutyo bhane feri din 1 bata (`shared/rewards.ts`, Nepal ko din anusar).
 - **Badge (20 ota)**: 🏅 button ma herne. Level/star/thau pura, quiz/photo/rush jit, perfect (3 taara), daily streak, power-up prayog, multiplayer khelne/jitne. Har badge ko coin inam, unlock hudaa toast + awaj + confetti (`shared/achievements.ts`).
 - Ginti `profile.stats` ma, purano save pani chalchha. Phase 2 ma server ma sarnu parchha (coin/inam client ma cheat hune sakchha).
+
+## Server ma coin/XP/badge (Supabase, Phase 2)
+Supabase env (`.env.local`) halyo bhane coin, XP, badge, daily inam ko hisab **server** le garchha; nabhae purano jastai local. Client le "kati coin paye" bhandaina, "kun level jite" matra bhancha.
+- **Setup (ek patak)**: (1) Dashboard > Authentication > Sign In / Providers > **Allow anonymous sign-ins** on. (2) `supabase link --project-ref <ref>` ra `supabase db push` (`supabase/migrations/…players.sql`: `players` table, RLS on, kunai policy chhaina => client le seedha lekhna sakdaina). (3) `npm run build:server && supabase functions deploy game`. (4) `.env.local` ma URL ra anon key.
+- **Server ko niyam** (`server/game.ts`, shared/ ko niyam tehi reuse): level unlock krama (skip nahune), star badhne matra, XP/coin/badge server le nikalchha, power-up ko daam server ko (difficulty thau ko band ma clamp), daily inam Nepal ko din anusar ek patak, daily shabda ek patak, multiplayer result 60s ma ek patak, tez-gati rate limit. `tests/server.test.ts`, `tests/sync.test.ts`.
+- **Local-first**: khelda turuntai dekhinchha, ghatana outbox ma (`shabda_outbox_v1`) basera server ma jancha. Internet nabhae basxa, aaepachhi order ma pugchha. Server ko number le local lai thik pardchha. Pahilo patak purano local progress import huncha (XP 5000, coin 500 samma, badge server le feri dinchha).
+- **Sima (imaandaari)**: jawaf client ma chha, tesaile "jite" bhanne dabi server le pakka verify garna sakdaina (unlock krama, rate limit le matra roknchha). Pakka upaya: round ra jawaf server le dine (arko phase). Anonymous login ek device/browser ma matra: arko phone ma same progress ko lagi Facebook player id ya email login chahinchha. Edge function Deno ma maile asal chalayera test garekoina (logic Node ma test gareko).
 #   B r a i n - M i x  
  

@@ -124,14 +124,14 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
     st.results.forEach((r) => r.forEach((t, i) => { if (t === 'green') greens.add(i); }));
     const pos = revealPosition(st.target.answer, greens, new Set(st.hinted.keys()));
     if (pos === null) return flash('Sabai akshar thaha bhaisakyo');
-    if (!opt.wallet.spend(cost())) return flash('Coin pugena', true);
+    if (!opt.wallet.spend('hint', cost(), st.target.difficulty)) return flash('Coin pugena', true);
     st.hinted.set(pos, st.target.answer[pos]!);
     play('coin');
     flash(`${pos + 1} ko akshar: ${st.target.answer[pos]!.toUpperCase()}`);
   }
   function powerTime(): void {
     if (st.over || !opt.wallet || !opt.timer) return;
-    if (!opt.wallet.spend(TIME_COST)) return flash('Coin pugena', true);
+    if (!opt.wallet.spend('time', TIME_COST, st.target.difficulty)) return flash('Coin pugena', true);
     deadline += TIME_BONUS_SEC * 1000;
     play('coin');
     flash(`+${TIME_BONUS_SEC} second`);

@@ -35,20 +35,20 @@ export function saveProfile(p: Profile): void {
 }
 
 /** Nepal time = UTC+5:45. offsetDays=-1 bhaneko hijo. */
-export function nepalDay(offsetDays = 0): { key: string; index: number } {
-  const t = Date.now() + 345 * 60000 + offsetDays * 86400000;
+export function nepalDay(offsetDays = 0, now: number = Date.now()): { key: string; index: number } {
+  const t = now + 345 * 60000 + offsetDays * 86400000;
   return { key: new Date(t).toISOString().slice(0, 10), index: Math.floor(t / 86400000) };
 }
 
-export function currentStreak(p: Profile): number {
-  return p.lastWin === nepalDay().key || p.lastWin === nepalDay(-1).key ? p.streak : 0;
+export function currentStreak(p: Profile, now: number = Date.now()): number {
+  return p.lastWin === nepalDay(0, now).key || p.lastWin === nepalDay(-1, now).key ? p.streak : 0;
 }
 
-export function recordDaily(p: Profile, tries: number, won: boolean): void {
-  const today = nepalDay().key;
+export function recordDaily(p: Profile, tries: number, won: boolean, now: number = Date.now()): void {
+  const today = nepalDay(0, now).key;
   p.daily = { date: today, tries, won };
   if (won && p.lastWin !== today) {
-    p.streak = p.lastWin === nepalDay(-1).key ? p.streak + 1 : 1;
+    p.streak = p.lastWin === nepalDay(-1, now).key ? p.streak + 1 : 1;
     p.lastWin = today;
   }
 }
