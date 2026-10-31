@@ -1,4 +1,6 @@
+import type { QuestFile } from '../../shared/quests';
 import { DIFFICULTY, type Difficulty, type WordEntry } from '../../shared/types';
+import { QUESTS } from './quests';
 import type { Palette, SceneParams } from './scenery';
 import { WORDS } from './words';
 
@@ -123,11 +125,23 @@ export function bandLabel(band: Difficulty[]): string {
 
 export const altitudeText = (m: number): string => `${m.toLocaleString('en-US')} m`;
 
-/** Deterministic: same level, same word. TEMP: sample words le dherai repeat hunchha. */
-export function levelWord(level: number): WordEntry {
+/** Admin le quest set nagareko level ma yehi shabda aaucha. Deterministic: same level, same word. TEMP: sample words le dherai repeat hunchha. */
+export function autoLevelWord(level: number): WordEntry {
   const ch = CHAPTERS[chapterOf(level)]!;
   const pool = WORDS.filter((w) => ch.band.includes(w.difficulty));
   return pool[level % pool.length] ?? WORDS[0]!;
+}
+
+/**
+ * Level (0-based index) ko shabda. Admin le tyo level ma shabda quest set gareko chha bhane tyo,
+ * natra auto. Quiz/photo quest ko game screen abhai chhaina, tesaile tyo level ma pani auto shabda aaucha.
+ */
+export function levelWord(level: number, quests: QuestFile = QUESTS): WordEntry {
+  const q = quests.quests[String(level + 1)]; // quest key 1-based ("Level 1")
+  if (q?.type === 'word') {
+    return { answer: q.answer, difficulty: q.difficulty, category: q.category || CHAPTERS[chapterOf(level)]!.place, hint: q.hint };
+  }
+  return autoLevelWord(level);
 }
 
 export const starsFor = (tries: number): 1 | 2 | 3 => (tries <= 2 ? 3 : tries <= 4 ? 2 : 1);

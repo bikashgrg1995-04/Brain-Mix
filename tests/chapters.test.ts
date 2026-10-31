@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHAPTERS, TOTAL_LEVELS, altitudeText, bandLabel, chapterOf, levelWord, starsFor } from '../src/game/chapters';
+import { CHAPTERS, TOTAL_LEVELS, altitudeText, autoLevelWord, bandLabel, chapterOf, levelWord, starsFor } from '../src/game/chapters';
 import { MAP_H, chapterAtY, pos } from '../src/game/map';
 import { buildScenery } from '../src/game/scenery';
 import { contrast } from '../src/game/theme';
@@ -11,9 +11,9 @@ describe('Yatra map data', () => {
     expect(chapterOf(0)).toBe(0);
     expect(chapterOf(99)).toBe(9);
   });
-  it('every level word is inside its chapter difficulty band', () => {
+  it('every auto level word is inside its chapter difficulty band', () => {
     for (let i = 0; i < TOTAL_LEVELS; i++) {
-      expect(CHAPTERS[chapterOf(i)]!.band).toContain(levelWord(i).difficulty);
+      expect(CHAPTERS[chapterOf(i)]!.band).toContain(autoLevelWord(i).difficulty);
     }
   });
   it('same level always gives the same word', () => {
