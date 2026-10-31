@@ -9,7 +9,8 @@ import { pickRound } from './game/rounds';
 import { mountGame, type GameOptions } from './game/ui';
 import { facebookAdapter } from './platform/facebook';
 import { mockAdapter } from './platform/mock';
-import { applyTheme } from './game/theme';
+import { Ambience, type SoundMix } from './audio/ambience';
+import { applyTheme, onPlaceChange } from './game/theme';
 import { loadProfile, recordDaily, saveProfile } from './state/profile';
 
 async function boot(): Promise<void> {
@@ -18,6 +19,14 @@ async function boot(): Promise<void> {
   await platform.start();
 
   const root = document.getElementById('app')!;
+  // Awaj: browser le tap pachhi matra dinchha, tesaile pahilo tap/key ma suru. Thau anusar mix badlinchha.
+  const ambience = new Ambience();
+  const SILENT: SoundMix = { wind: 0, river: 0, birds: 0, bell: 0, city: 0 };
+  onPlaceChange((i) => ambience.setMix(i === null ? SILENT : CHAPTERS[i]!.sound));
+  const startSound = (): void => ambience.start();
+  window.addEventListener('pointerdown', startSound, { once: true });
+  window.addEventListener('keydown', startSound, { once: true });
+  const sound = { muted: () => ambience.isMuted, toggle: () => ambience.setMuted(!ambience.isMuted) };
   const profile = loadProfile();
   let dispose: (() => void) | null = null;
   const stop = (): void => { dispose?.(); dispose = null; };
@@ -28,14 +37,14 @@ async function boot(): Promise<void> {
   function showMap(): void {
     stop();
     dispose = renderMap(root, profile, playLevel); // map ले scroll anusar theme afai badlinchha
-    renderNav(root, 'yatra', goTab);
+    renderNav(root, 'yatra', goTab, sound);
   }
 
   function showMulti(): void {
     stop();
     applyTheme(null);
     dispose = renderMultiplayer(root, { platform, onExit: showMap });
-    renderNav(root, 'multi', goTab);
+    renderNav(root, 'multi', goTab, sound);
   }
 
   function showKhel(): void {
@@ -45,7 +54,7 @@ async function boot(): Promise<void> {
       onDaily: () => playSimple('daily', 0),
       onPractice: (f) => playSimple('practice', f),
     });
-    renderNav(root, 'khel', goTab);
+    renderNav(root, 'khel', goTab, sound);
   }
 
   function playLevel(i: number, avoid?: string): void {

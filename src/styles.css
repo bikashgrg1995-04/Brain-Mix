@@ -136,7 +136,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 #app { position: relative; z-index: 1; }
 
 /* ---------- Bottom nav ---------- */
-.nav { position: sticky; bottom: 0; margin-top: auto; z-index: 30; display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 6px; padding: 8px 12px; background: var(--surface); border-top: 1px solid var(--line); }
+.nav { position: sticky; bottom: 0; margin-top: auto; z-index: 30; display: grid; grid-template-columns: 1fr 1.5fr 1fr auto; gap: 6px; padding: 8px 12px; background: var(--surface); border-top: 1px solid var(--line); }
 .nav button { border: 0; border-radius: 10px; padding: 9px 4px; background: transparent; color: var(--muted); font-weight: 700; font-size: .85rem; }
 .nav button.on { background: var(--ink); color: var(--bg); }
 .nav button:disabled { opacity: .5; cursor: default; }
@@ -190,3 +190,5 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .rw label { font-size: .8rem; color: var(--muted); }
 .rw input { padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 1.05rem; letter-spacing: .12em; }
 .msg.wait { margin-top: 30px; }
+
+.nav .snd { min-width: 44px; font-size: 1.15rem; padding: 6px 8px; }

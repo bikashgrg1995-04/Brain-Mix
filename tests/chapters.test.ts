@@ -100,3 +100,25 @@ describe('map layout', () => {
     expect(chapterAtY(MAP_H + 1000)).toBe(0);
   });
 });
+
+describe('place sound mixes', () => {
+  const keys = ['wind', 'river', 'birds', 'bell', 'city'] as const;
+  it('every place has all five layers in 0..1 and is not silent', () => {
+    for (const ch of CHAPTERS) {
+      for (const k of keys) {
+        expect(ch.sound[k], `${ch.place}.${k}`).toBeGreaterThanOrEqual(0);
+        expect(ch.sound[k], `${ch.place}.${k}`).toBeLessThanOrEqual(1);
+      }
+      expect(keys.reduce((s, k) => s + ch.sound[k], 0), ch.place).toBeGreaterThan(0.3);
+    }
+  });
+  it('neighbouring places sound different, and the climb gets windier and emptier', () => {
+    for (let i = 1; i < CHAPTERS.length; i++) {
+      const a = CHAPTERS[i - 1]!.sound, b = CHAPTERS[i]!.sound;
+      expect(keys.some((k) => a[k] !== b[k]), CHAPTERS[i]!.place).toBe(true);
+    }
+    const first = CHAPTERS[0]!.sound, last = CHAPTERS[CHAPTERS.length - 1]!.sound;
+    expect(last.wind).toBeGreaterThan(first.wind);
+    expect(last.birds + last.city).toBeLessThan(first.birds + first.city);
+  });
+});

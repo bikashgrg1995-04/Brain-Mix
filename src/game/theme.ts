@@ -12,6 +12,11 @@ export function contrast(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05);
 }
 
+type Listener = (index: number | null) => void;
+let listener: Listener | null = null;
+/** Thau badlida (awaj ko lagi). main.ts le jodchha. */
+export const onPlaceChange = (fn: Listener): void => { listener = fn; };
+
 let sceneEl: HTMLElement | null = null;
 
 function scene(): HTMLElement {
@@ -36,6 +41,7 @@ function clearScene(): void {
  * index = null: default theme (Home, Daily, Practice).
  */
 export function applyTheme(index: number | null, withBanner = false): void {
+  listener?.(index);
   const root = document.documentElement.style;
   const ch = index === null ? undefined : CHAPTERS[index];
   if (!ch) {
