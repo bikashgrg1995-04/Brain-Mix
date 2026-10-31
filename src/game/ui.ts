@@ -2,8 +2,13 @@ import { DIFFICULTY, type Tile, type WordEntry } from '../../shared/types';
 import { evaluate, isWin } from '../../shared/evaluate';
 import { normalizeExact } from '../../shared/normalize';
 import { xpFor } from '../../shared/xp';
+import { TIME_BONUS_SEC, TIME_COST, hintCost, revealPosition, roundCoins } from '../../shared/powerups';
+import { play } from '../audio/sfx';
 import type { PlatformAdapter } from '../platform/adapter';
+import { starsFor } from './chapters';
+import { confetti, vibrate } from './fx';
 import type { Filter } from './home';
+import type { Wallet } from './wallet';
 import { ALLOW_ANY_GUESS, WORDS } from './words';
 
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
@@ -18,12 +23,14 @@ export interface GameOptions {
   level?: { index: number; label: string; hint: 'full' | 'category' | 'none'; firstClear: boolean };
   onNext?: () => void;
   onExit(): void;
-  onFinish(r: { won: boolean; tries: number; xp: number }): void;
+  wallet?: Wallet; // level ma power-up (akshar hint, +samay) ko lagi
+  onFinish(r: { won: boolean; tries: number; xp: number; coins: number }): void;
 }
 
 export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: GameOptions): () => void {
   let deadline = opt.timer ? Date.now() + opt.timer * 1000 : 0;
   let tick = 0;
+  let lastTick = -1;
   const left = (): number => (deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0);
   const clock = (s: number): string => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   let last = ''; // st banda aagadi (pick() le use garchha)
@@ -40,6 +47,10 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
     won: false,
     keyState: {} as Record<string, Tile>,
     message: '',
+    hinted: new Map<number, string>(),
+    flip: -1,
+    shake: false,
+    won0: false,
   };
 
   function pick(): WordEntry {
@@ -52,20 +63,24 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
   function reset(): void {
     st.target = fixed ? st.target : pick();
     st.maxTries = DIFFICULTY[st.target.difficulty].maxTries;
-    Object.assign(st, { guesses: [], results: [], current: '', over: false, won: false, keyState: {}, message: '' });
+    Object.assign(st, { guesses: [], results: [], current: '', over: false, won: false, keyState: {}, message: '', hinted: new Map(), flip: -1, shake: false });
     if (opt.timer) deadline = Date.now() + opt.timer * 1000;
     render();
   }
 
-  function flash(msg: string): void { st.message = msg; render(); }
+  function flash(msg: string, bad = false): void {
+    st.message = msg;
+    if (bad) { st.shake = true; play('bad'); vibrate(40); }
+    render();
+  }
 
   function submit(): void {
     if (st.over) return;
     const len = st.target.answer.length;
     const g = normalizeExact(st.current);
-    if (g.length !== len) return flash(`${len} akshar chahinchha`);
+    if (g.length !== len) return flash(`${len} akshar chahinchha`, true);
     if (!ALLOW_ANY_GUESS) return flash('Shabda list ma chhaina'); // Phase 2: server check
-    if (st.guesses.includes(g)) return flash('Already guessed');
+    if (st.guesses.includes(g)) return flash('Already guessed', true);
     const tiles = evaluate(g, st.target.answer);
     st.guesses.push(g);
     st.results.push(tiles);
@@ -75,17 +90,21 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
       if (!prev || RANK[t] > RANK[prev]) st.keyState[ch] = t;
     });
     st.current = '';
+    st.flip = st.guesses.length - 1;
     if (isWin(tiles)) {
       st.over = st.won = true;
       const full = xpFor(st.guesses.length, st.target.difficulty);
       const xp = lv && !lv.firstClear ? 0 : full; // level replay ma XP hudaina
-      st.message = xp > 0 ? `Sahi! +${xp} XP` : 'Sahi!';
-      opt.onFinish({ won: true, tries: st.guesses.length, xp });
+      const coins = lv ? roundCoins(starsFor(st.guesses.length), lv.firstClear) : 0;
+      st.message = ['Sahi!', xp > 0 ? `+${xp} XP` : '', coins > 0 ? `+${coins} 🪙` : ''].filter(Boolean).join(' ');
+      opt.onFinish({ won: true, tries: st.guesses.length, xp, coins });
+      play('win'); vibrate([30, 40, 60]); st.won0 = true;
     } else if (st.guesses.length >= st.maxTries) {
       st.over = true;
       st.message = `Shabda thiyo: ${st.target.answer}`;
-      opt.onFinish({ won: false, tries: st.guesses.length, xp: 0 });
-    }
+      opt.onFinish({ won: false, tries: st.guesses.length, xp: 0, coins: 0 });
+      play('lose');
+    } else play('ok');
     render();
   }
 
@@ -93,9 +112,29 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
     if (st.over) return;
     if (k === 'enter') return submit();
     if (k === 'back') st.current = st.current.slice(0, -1);
-    else if (/^[a-z]$/.test(k) && st.current.length < st.target.answer.length) st.current += k;
+    else if (/^[a-z]$/.test(k) && st.current.length < st.target.answer.length) { st.current += k; play('tap'); }
     st.message = '';
     render();
+  }
+
+  const cost = (): number => hintCost(st.target.difficulty);
+  function powerHint(): void {
+    if (st.over || !opt.wallet) return;
+    const greens = new Set<number>();
+    st.results.forEach((r) => r.forEach((t, i) => { if (t === 'green') greens.add(i); }));
+    const pos = revealPosition(st.target.answer, greens, new Set(st.hinted.keys()));
+    if (pos === null) return flash('Sabai akshar thaha bhaisakyo');
+    if (!opt.wallet.spend(cost())) return flash('Coin pugena', true);
+    st.hinted.set(pos, st.target.answer[pos]!);
+    play('coin');
+    flash(`${pos + 1} ko akshar: ${st.target.answer[pos]!.toUpperCase()}`);
+  }
+  function powerTime(): void {
+    if (st.over || !opt.wallet || !opt.timer) return;
+    if (!opt.wallet.spend(TIME_COST)) return flash('Coin pugena', true);
+    deadline += TIME_BONUS_SEC * 1000;
+    play('coin');
+    flash(`+${TIME_BONUS_SEC} second`);
   }
 
   function shareGrid(): string {
@@ -113,10 +152,13 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
       const typing = r === st.guesses.length && !st.over;
       let cells = '';
       for (let c = 0; c < len; c++) {
-        const ch = done ? st.guesses[r]![c]! : typing ? st.current[c] ?? '' : '';
-        cells += `<div class="tile ${done ? done[c]! : ch ? 'filled' : ''}">${ch}</div>`;
+        const typed = typing ? st.current[c] ?? '' : '';
+        const ghost = typing && !typed ? st.hinted.get(c) ?? '' : '';
+        const ch = done ? st.guesses[r]![c]! : typed || ghost;
+        const cls = done ? `${done[c]!}${r === st.flip ? ' flip' : ''}` : typed ? 'filled pop' : ghost ? 'ghost' : '';
+        cells += `<div class="tile ${cls}" ${r === st.flip ? `style="--i:${c}"` : ''}>${ch}</div>`;
       }
-      rows.push(`<div class="row">${cells}</div>`);
+      rows.push(`<div class="row ${typing && st.shake ? 'shake' : ''}">${cells}</div>`);
     }
     const keys = ROWS.map((row, i) => {
       const btns = row.split('').map((k) => `<button class="key ${st.keyState[k] ?? ''}" data-k="${k}">${k}</button>`).join('');
@@ -130,6 +172,11 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
       else if (!st.won) extra = '<button id="next" class="primary">Feri khel</button>';
       else if (opt.onNext) extra = '<button id="go" class="primary">Agaadi</button>';
     }
+    const power = lv && opt.wallet && !st.over
+      ? `<div class="power"><span class="coins" aria-label="Coin">🪙 ${opt.wallet.coins()}</span>
+          <button id="p-hint" class="pw" ${opt.wallet.coins() < cost() ? 'disabled' : ''}>💡 Akshar <em>${cost()}</em></button>
+          ${opt.timer ? `<button id="p-time" class="pw" ${opt.wallet.coins() < TIME_COST ? 'disabled' : ''}>⏱ +${TIME_BONUS_SEC}s <em>${TIME_COST}</em></button>` : ''}</div>`
+      : '';
     const after = st.over ? `<div class="after"><button id="share" class="secondary">Share grid</button>${extra}</div>` : '';
     const title = daily ? 'Aaja ko Shabda' : lv ? `Level ${lv.index + 1}` : 'Practice';
     const sub = lv ? `${lv.label} · ${d.name} · ${len} akshar` : `${d.name} · ${len} akshar · ${st.maxTries} try`;
@@ -148,11 +195,16 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
         ${clue}
         <main class="board" style="--cols:${len}">${rows.join('')}</main>
         <p class="msg" role="status">${st.message || '&nbsp;'}</p>
+        ${power}
         ${after}
         <section class="kb">${keys}</section>
       </div>`;
     root.querySelectorAll<HTMLButtonElement>('.key').forEach((b) => (b.onclick = () => press(b.dataset.k!)));
     root.querySelector<HTMLButtonElement>('#back')!.onclick = () => opt.onExit();
+    root.querySelector<HTMLButtonElement>('#p-hint')?.addEventListener('click', powerHint);
+    root.querySelector<HTMLButtonElement>('#p-time')?.addEventListener('click', powerTime);
+    if (st.won0) { st.won0 = false; confetti(root.querySelector<HTMLElement>('.game')!); }
+    st.flip = -1; st.shake = false; // animation ek patak matra
     root.querySelector<HTMLButtonElement>('#next')?.addEventListener('click', reset);
     root.querySelector<HTMLButtonElement>('#go')?.addEventListener('click', () => opt.onNext?.());
     root.querySelector<HTMLButtonElement>('#share')?.addEventListener('click', async () => {
@@ -174,10 +226,12 @@ export function mountGame(root: HTMLElement, platform: PlatformAdapter, opt: Gam
       const l = left();
       const el = root.querySelector('.timer');
       if (el) { el.textContent = clock(l); el.classList.toggle('low', l <= 10); }
+      if (l > 0 && l <= 5 && l !== lastTick) { lastTick = l; play('tick'); }
       if (l <= 0) {
         st.over = true;
         st.message = `Samay sakiyo. Shabda thiyo: ${st.target.answer}`;
-        opt.onFinish({ won: false, tries: st.guesses.length, xp: 0 });
+        opt.onFinish({ won: false, tries: st.guesses.length, xp: 0, coins: 0 });
+        play('lose');
         render();
       }
     }, 250);

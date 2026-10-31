@@ -10,6 +10,7 @@ import { mountGame, type GameOptions } from './game/ui';
 import { facebookAdapter } from './platform/facebook';
 import { mockAdapter } from './platform/mock';
 import { Ambience, type SoundMix } from './audio/ambience';
+import { setSfxMuted } from './audio/sfx';
 import { applyTheme, onPlaceChange } from './game/theme';
 import { loadProfile, recordDaily, saveProfile } from './state/profile';
 
@@ -26,7 +27,7 @@ async function boot(): Promise<void> {
   const startSound = (): void => ambience.start();
   window.addEventListener('pointerdown', startSound, { once: true });
   window.addEventListener('keydown', startSound, { once: true });
-  const sound = { muted: () => ambience.isMuted, toggle: () => ambience.setMuted(!ambience.isMuted) };
+  const sound = { muted: () => ambience.isMuted, toggle: () => { ambience.setMuted(!ambience.isMuted); setSfxMuted(ambience.isMuted); } };
   const profile = loadProfile();
   let dispose: (() => void) | null = null;
   const stop = (): void => { dispose?.(); dispose = null; };
@@ -63,9 +64,11 @@ async function boot(): Promise<void> {
     const firstClear = (profile.levels[i] ?? 0) === 0;
     const round = pickRound(i, Math.random, undefined, avoid); // random type, ya admin ne set gareko
     applyTheme(chapterOf(i), true); // thau ko accent + mathi ko background
-    const done = (stars: number, xp: number): void => {
+    const wallet = { coins: () => profile.coins, spend: (n: number) => { if (profile.coins < n) return false; profile.coins -= n; saveProfile(profile); return true; } };
+    const done = (stars: number, xp: number, coins: number): void => {
       profile.levels[i] = Math.max(profile.levels[i] ?? 0, stars);
       profile.xp += xp;
+      profile.coins += coins;
       saveProfile(profile);
     };
     const onNext = i + 1 < TOTAL_LEVELS ? () => playLevel(i + 1) : undefined;
@@ -78,7 +81,8 @@ async function boot(): Promise<void> {
         level: { index: i, label: ch.place, hint: ch.hint, firstClear },
         onNext,
         onExit: showMap,
-        onFinish: ({ won, tries, xp }) => { if (won) done(starsFor(tries), xp); },
+        wallet,
+        onFinish: ({ won, tries, xp, coins }) => { if (won) done(starsFor(tries), xp, coins); },
       });
       return;
     }
@@ -90,7 +94,8 @@ async function boot(): Promise<void> {
       onRetry: () => playLevel(i, round.id),
       onNext,
       onExit: showMap,
-      onFinish: ({ won, stars, xp }) => { if (won) done(stars, xp); },
+      wallet,
+      onFinish: ({ won, stars, xp, coins }) => { if (won) done(stars, xp, coins); },
     });
   }
 

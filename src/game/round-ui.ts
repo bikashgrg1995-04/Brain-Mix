@@ -1,7 +1,11 @@
 import { evaluate } from '../../shared/evaluate';
 import { normalizeExact } from '../../shared/normalize';
 import { RUSH_WORDS, photoStars, roundXp, rushFraction, rushStars, timedStars, wordPoints, WORD_MAX_POINTS } from '../../shared/score';
+import { TIME_BONUS_SEC, TIME_COST, fiftyFifty, hintCost, revealPosition, roundCoins } from '../../shared/powerups';
 import { DIFFICULTY } from '../../shared/types';
+import { play } from '../audio/sfx';
+import { confetti, vibrate } from './fx';
+import type { Wallet } from './wallet';
 import type { Round } from './rounds';
 
 type Stars = 0 | 1 | 2 | 3;
@@ -15,7 +19,8 @@ export interface RoundOptions {
   onRetry(): void;
   onNext?: () => void;
   onExit(): void;
-  onFinish(r: { won: boolean; stars: Stars; xp: number; points?: number }): void;
+  wallet?: Wallet;
+  onFinish(r: { won: boolean; stars: Stars; xp: number; coins: number; points?: number }): void;
 }
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -23,8 +28,8 @@ const stars = (n: number): string => '★'.repeat(n) + '☆'.repeat(3 - n);
 export const fmtTime = (s: number): string => `${Math.floor(s / 60)}:${String(Math.max(0, s) % 60).padStart(2, '0')}`;
 
 /** Wall-clock timer: tab background ma gayepani samay thik ghatchha. */
-function startTimer(seconds: number, onTick: (left: number) => void, onEnd: () => void): { stop(): void; left(): number } {
-  const end = Date.now() + seconds * 1000;
+function startTimer(seconds: number, onTick: (left: number) => void, onEnd: () => void): { stop(): void; left(): number; extend(sec: number): void } {
+  let end = Date.now() + seconds * 1000;
   let done = false;
   const left = (): number => Math.max(0, Math.ceil((end - Date.now()) / 1000));
   const id = window.setInterval(() => {
@@ -32,7 +37,7 @@ function startTimer(seconds: number, onTick: (left: number) => void, onEnd: () =
     onTick(l);
     if (l <= 0 && !done) { done = true; window.clearInterval(id); onEnd(); }
   }, 250);
-  return { stop: () => { done = true; window.clearInterval(id); }, left };
+  return { stop: () => { done = true; window.clearInterval(id); }, left, extend: (sec) => { end += sec * 1000; } };
 }
 
 export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions): () => void {
@@ -44,11 +49,16 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
   let wordIdx = 0; // rush
   let points: number[] = [];
   let lastTiles: { guess: string; tiles: string[] } | null = null;
-  let result: { stars: Stars; xp: number; points?: number; text: string } | null = null;
+  let result: { stars: Stars; xp: number; coins: number; points?: number; text: string } | null = null;
+  let hinted = new Map<number, string>(); // photo/rush: ahile ko shabda ma dekhaiyeko akshar
+  let gone: number[] = []; // quiz: 50:50 le hatayeko option
+  let celebrate = false;
+  let lastTick = -1;
 
   const timer = startTimer(round.timer, (l) => {
     const el = root.querySelector('.timer');
     if (el) { el.textContent = fmtTime(l); el.classList.toggle('low', l <= 10); }
+    if (!over && l > 0 && l <= 5 && l !== lastTick) { lastTick = l; play('tick'); }
   }, () => timeUp());
 
   function finish(s: Stars, text: string, pts?: number): void {
@@ -56,8 +66,10 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
     over = true;
     timer.stop();
     const xp = roundXp(s, round.difficulty, opt.firstClear);
-    result = { stars: s, xp, points: pts, text: xp > 0 ? `${text} +${xp} XP` : text };
-    opt.onFinish({ won: s > 0, stars: s, xp, points: pts });
+    const coins = roundCoins(s, opt.firstClear);
+    result = { stars: s, xp, coins, points: pts, text: [text, xp > 0 ? `+${xp} XP` : '', coins > 0 ? `+${coins} 🪙` : ''].filter(Boolean).join(' ') };
+    opt.onFinish({ won: s > 0, stars: s, xp, coins, points: pts });
+    if (s > 0) { play('win'); vibrate([30, 40, 60]); celebrate = true; } else play('lose');
     render();
   }
 
@@ -88,21 +100,23 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
     const g = normalizeExact(raw);
     if (round.kind === 'photo') {
       const len = round.answer.length;
-      if (g.length !== len) { message = `${len} akshar chahinchha`; return render(); }
+      if (g.length !== len) { message = `${len} akshar chahinchha`; play('bad'); return render(); }
       tries++;
       lastTiles = { guess: g, tiles: evaluate(g, round.answer) };
       if (g === round.answer) return finish(photoStars(tries, timer.left(), round.timer), 'Sahi!');
       if (tries >= 3) return finish(0, `Shabda thiyo: ${round.answer}`);
       message = `Galat (${3 - tries} try baaki)`;
+      play('bad'); vibrate(40);
       return render();
     }
     if (round.kind === 'rush') {
       const w = round.words[wordIdx]!;
-      if (g.length !== w.answer.length) { message = `${w.answer.length} akshar chahinchha`; return render(); }
+      if (g.length !== w.answer.length) { message = `${w.answer.length} akshar chahinchha`; play('bad'); return render(); }
       const p = wordPoints(g, w.answer);
       points.push(p);
       lastTiles = { guess: g, tiles: evaluate(g, w.answer) };
       message = g === w.answer ? `Sahi! +${p}` : `${w.answer} thiyo: +${p} (thau anusar)`;
+      play(g === w.answer ? 'ok' : 'tap');
       return nextWord();
     }
   }
@@ -119,6 +133,7 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
   function nextWord(): void {
     if (round.kind !== 'rush') return;
     wordIdx++;
+    hinted = new Map();
     if (wordIdx >= RUSH_WORDS) {
       const s = rushStars(points);
       const pct = Math.round(rushFraction(points) * 100);
@@ -127,8 +142,32 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
     render();
   }
 
+  // ----- power-ups -----
+  const hCost = hintCost(round.difficulty);
+  function powerTime(): void {
+    if (over || !opt.wallet) return;
+    if (!opt.wallet.spend(TIME_COST)) { message = 'Coin pugena'; play('bad'); return render(); }
+    timer.extend(TIME_BONUS_SEC);
+    message = `+${TIME_BONUS_SEC} second`; play('coin'); render();
+  }
+  function powerHint(): void {
+    if (over || !opt.wallet) return;
+    if (round.kind === 'quiz') {
+      if (gone.length) return;
+      if (!opt.wallet.spend(hCost)) { message = 'Coin pugena'; play('bad'); return render(); }
+      gone = fiftyFifty(round.options.length, round.correct);
+      message = '2 galat option hatayo'; play('coin'); return render();
+    }
+    const answer = round.kind === 'photo' ? round.answer : round.words[wordIdx]!.answer;
+    const pos = revealPosition(answer, new Set(), new Set(hinted.keys()));
+    if (pos === null) return;
+    if (!opt.wallet.spend(hCost)) { message = 'Coin pugena'; play('bad'); return render(); }
+    hinted.set(pos, answer[pos]!);
+    message = `${pos + 1} ko akshar: ${answer[pos]!.toUpperCase()}`; play('coin'); render();
+  }
+
   // ----- views -----
-  const blanks = (n: number): string => `<div class="blanks" aria-hidden="true">${'<i></i>'.repeat(n)}</div>`;
+  const blanks = (n: number): string => `<div class="blanks" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<i>${hinted.get(i) ?? ''}</i>`).join('')}</div>`;
   const tileRow = (t: { guess: string; tiles: string[] }): string =>
     `<div class="row" style="--cols:${t.guess.length}">${t.guess.split('').map((c, i) => `<div class="tile ${t.tiles[i]}">${c}</div>`).join('')}</div>`;
   const clue = (cat: string, hint?: string): string =>
@@ -137,8 +176,8 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
   function body(): string {
     if (round.kind === 'quiz') {
       const opts = round.options.map((o, i) => {
-        const cls = over ? (i === round.correct ? 'right' : i === picked ? 'wrong' : '') : '';
-        return `<button class="opt ${cls}" data-i="${i}" ${over ? 'disabled' : ''}><span>${'ABCD'[i]}</span>${esc(o)}</button>`;
+        const cls = over ? (i === round.correct ? 'right' : i === picked ? 'wrong' : '') : gone.includes(i) ? 'gone' : '';
+        return `<button class="opt ${cls}" data-i="${i}" ${over || gone.includes(i) ? 'disabled' : ''}><span>${'ABCD'[i]}</span>${esc(o)}</button>`;
       }).join('');
       return `<p class="clue"><b>${esc(round.category)}</b>MCQ</p><h2 class="q">${esc(round.question)}</h2><div class="opts" role="group" aria-label="Options">${opts}</div>`;
     }
@@ -169,6 +208,12 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
         ${result.points !== undefined ? `<p class="pts">${result.points} / ${RUSH_WORDS * WORD_MAX_POINTS} points</p>` : ''}
         <div class="after">${again}${retry}</div></div>`;
     }
+    const hintUsed = round.kind === 'quiz' ? gone.length > 0 : false;
+    const power = opt.wallet && !over
+      ? `<div class="power"><span class="coins" aria-label="Coin">🪙 ${opt.wallet.coins()}</span>
+          ${round.kind === 'quiz' ? `<button id="p-hint" class="pw" ${hintUsed || opt.wallet.coins() < hCost ? 'disabled' : ''}>✂️ 50:50 <em>${hCost}</em></button>` : `<button id="p-hint" class="pw" ${opt.wallet.coins() < hCost ? 'disabled' : ''}>💡 Akshar <em>${hCost}</em></button>`}
+          <button id="p-time" class="pw" ${opt.wallet.coins() < TIME_COST ? 'disabled' : ''}>⏱ +${TIME_BONUS_SEC}s <em>${TIME_COST}</em></button></div>`
+      : '';
     const kindName = { quiz: 'Quiz', photo: 'Chitra Shabda', rush: `${RUSH_WORDS} shabda, samay ma` }[round.kind];
     root.innerHTML = `
       <div class="flags" aria-hidden="true"></div>
@@ -181,6 +226,7 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
         <div class="timerbar"><span class="timer ${timer.left() <= 10 ? 'low' : ''}" role="timer">${fmtTime(timer.left())}</span></div>
         ${body()}
         <p class="msg" role="status">${esc(over && result ? result.text : message) || '&nbsp;'}</p>
+        ${power}
         ${after}
       </div>`;
     root.querySelector<HTMLButtonElement>('#back')!.onclick = () => opt.onExit();
@@ -188,6 +234,9 @@ export function mountRound(root: HTMLElement, round: NonGrid, opt: RoundOptions)
     root.querySelector<HTMLButtonElement>('#retry')?.addEventListener('click', () => opt.onRetry());
     root.querySelector<HTMLButtonElement>('#go')?.addEventListener('click', () => opt.onNext?.());
     root.querySelector<HTMLButtonElement>('#skip')?.addEventListener('click', skip);
+    root.querySelector<HTMLButtonElement>('#p-hint')?.addEventListener('click', powerHint);
+    root.querySelector<HTMLButtonElement>('#p-time')?.addEventListener('click', powerTime);
+    if (celebrate) { celebrate = false; confetti(root.querySelector<HTMLElement>('.game')!); }
     const form = root.querySelector<HTMLFormElement>('.guess');
     if (form) {
       const inp = form.querySelector<HTMLInputElement>('#g')!;

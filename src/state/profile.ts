@@ -1,9 +1,11 @@
 // TEMPORARY: localStorage. Facebook webview ma persist nahune sakchha.
 // Phase 2 ma server (`players`, `player_progress`) ma sarne.
+import { START_COINS } from '../../shared/powerups';
 const KEY = 'shabda_profile_v1';
 
 export interface Profile {
   xp: number;
+  coins: number; // power-up kharid garne (shared/powerups.ts)
   streak: number;
   lastWin: string; // Nepal date key YYYY-MM-DD
   levels: Record<string, number>; // Yatra: level index -> stars (1-3)
@@ -11,7 +13,7 @@ export interface Profile {
 }
 
 export function loadProfile(): Profile {
-  const empty: Profile = { xp: 0, streak: 0, lastWin: '', levels: {} };
+  const empty: Profile = { xp: 0, coins: START_COINS, streak: 0, lastWin: '', levels: {} };
   try {
     const raw = localStorage.getItem(KEY);
     return raw ? { ...empty, ...JSON.parse(raw) } : empty;

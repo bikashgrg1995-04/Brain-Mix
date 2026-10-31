@@ -88,7 +88,7 @@ export function renderMap(root: HTMLElement, p: Profile, onLevel: (i: number) =>
     <div class="flags" aria-hidden="true"></div>
     <header class="mapbar">
       <div><h1>Shabda</h1><small><span class="mp-place"></span><span class="mp-meta"></span></small></div>
-      <div class="stats"><span class="pill">Streak ${currentStreak(p)}</span><span class="pill">${p.xp} XP</span></div>
+      <div class="stats"><span class="pill">Streak ${currentStreak(p)}</span><span class="pill">🪙 ${p.coins}</span><span class="pill">${p.xp} XP</span></div>
     </header>
     <div class="map" style="aspect-ratio:${W} / ${MAP_H}">
       ${secs}
