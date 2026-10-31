@@ -42,8 +42,14 @@ function smooth(p: Pt[]): string {
 const pct = (v: number, of: number): string => ((v / of) * 100).toFixed(3) + '%';
 const starText = (s: number): string => '★'.repeat(s) + '☆'.repeat(3 - s);
 
+export interface MapExtras {
+  onBadges(): void;
+  badgeText: string;
+  mountDaily(el: HTMLElement): void;
+}
+
 /** Returns cleanup (scroll listener hataune). */
-export function renderMap(root: HTMLElement, p: Profile, onLevel: (i: number) => void): () => void {
+export function renderMap(root: HTMLElement, p: Profile, onLevel: (i: number) => void, extras?: MapExtras): () => void {
   const unlockAll = new URLSearchParams(location.search).has('unlock'); // dev: ?unlock=1
   let cur = 0;
   while (cur < TOTAL_LEVELS && (p.levels[cur] ?? 0) > 0) cur++;
@@ -88,8 +94,9 @@ export function renderMap(root: HTMLElement, p: Profile, onLevel: (i: number) =>
     <div class="flags" aria-hidden="true"></div>
     <header class="mapbar">
       <div><h1>Shabda</h1><small><span class="mp-place"></span><span class="mp-meta"></span></small></div>
-      <div class="stats"><span class="pill">Streak ${currentStreak(p)}</span><span class="pill">🪙 ${p.coins}</span><span class="pill">${p.xp} XP</span></div>
+      <div class="stats"><span class="pill">Streak ${currentStreak(p)}</span><span class="pill coinpill">🪙 ${p.coins}</span><span class="pill">${p.xp} XP</span>${extras ? `<button class="pill btn" id="badges" aria-label="Badge ${extras.badgeText}">🏅 ${extras.badgeText}</button>` : ''}</div>
     </header>
+    ${extras ? '<div id="daily"></div>' : ''}
     <div class="map" style="aspect-ratio:${W} / ${MAP_H}">
       ${secs}
       <svg class="road" viewBox="0 0 ${W} ${MAP_H}" aria-hidden="true">
@@ -98,6 +105,10 @@ export function renderMap(root: HTMLElement, p: Profile, onLevel: (i: number) =>
       ${ribbons}${nodes}
     </div>`;
 
+  if (extras) {
+    root.querySelector<HTMLButtonElement>('#badges')!.onclick = extras.onBadges;
+    extras.mountDaily(root.querySelector<HTMLElement>('#daily')!);
+  }
   root.querySelectorAll<HTMLButtonElement>('.node').forEach((b) => (b.onclick = () => onLevel(Number(b.dataset.i))));
 
   // Scroll garda thau, altitude, difficulty ra theme badlinchha

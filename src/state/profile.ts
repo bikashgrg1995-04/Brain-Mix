@@ -1,6 +1,8 @@
 // TEMPORARY: localStorage. Facebook webview ma persist nahune sakchha.
 // Phase 2 ma server (`players`, `player_progress`) ma sarne.
+import { emptyStats, type Stats } from '../../shared/achievements';
 import { START_COINS } from '../../shared/powerups';
+import type { RewardState } from '../../shared/rewards';
 const KEY = 'shabda_profile_v1';
 
 export interface Profile {
@@ -10,13 +12,19 @@ export interface Profile {
   lastWin: string; // Nepal date key YYYY-MM-DD
   levels: Record<string, number>; // Yatra: level index -> stars (1-3)
   daily?: { date: string; tries: number; won: boolean };
+  stats: Stats; // badge ko lagi ginti
+  badges: Record<string, string>; // badge id -> unlock bhayeko din
+  reward?: RewardState; // daily inam
 }
 
 export function loadProfile(): Profile {
-  const empty: Profile = { xp: 0, coins: START_COINS, streak: 0, lastWin: '', levels: {} };
+  const empty: Profile = { xp: 0, coins: START_COINS, streak: 0, lastWin: '', levels: {}, stats: emptyStats(), badges: {} };
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...empty, ...JSON.parse(raw) } : empty;
+    if (!raw) return empty;
+    const saved = JSON.parse(raw) as Partial<Profile>;
+    // purano save ma naya field chhaina: nested default pani milaune
+    return { ...empty, ...saved, stats: { ...empty.stats, ...saved.stats, wins: { ...empty.stats.wins, ...saved.stats?.wins } }, badges: { ...saved.badges } };
   } catch {
     return empty;
   }

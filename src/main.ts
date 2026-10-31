@@ -1,7 +1,9 @@
 import './styles.css';
 import { CHAPTERS, TOTAL_LEVELS, chapterOf, starsFor } from './game/chapters';
 import { dailyWord, renderHome, type Filter } from './game/home';
+import { mountDaily, renderBadges } from './game/badges';
 import { renderMap } from './game/map';
+import { toast } from './game/toast';
 import { renderNav, type Tab } from './game/nav';
 import { mountRound } from './game/round-ui';
 import { renderMultiplayer } from './mp/ui';
@@ -13,6 +15,9 @@ import { Ambience, type SoundMix } from './audio/ambience';
 import { setSfxMuted } from './audio/sfx';
 import { applyTheme, onPlaceChange } from './game/theme';
 import { loadProfile, recordDaily, saveProfile } from './state/profile';
+import { awardBadges, badgeCount, recordMultiplayer, recordPowerup, recordWin } from './state/progress';
+import { play } from './audio/sfx';
+import { confetti } from './game/fx';
 
 async function boot(): Promise<void> {
   const platform = (window as any).FBInstant ? facebookAdapter() : mockAdapter();
@@ -32,19 +37,46 @@ async function boot(): Promise<void> {
   let dispose: (() => void) | null = null;
   const stop = (): void => { dispose?.(); dispose = null; };
 
+  /** Event pachhi badge check: naya unlock bhaye toast + awaj + coin inam. */
+  function checkBadges(): void {
+    const got = awardBadges(profile);
+    if (!got.length) return;
+    saveProfile(profile);
+    play('win');
+    confetti(document.body, 22);
+    got.forEach((b, i) => window.setTimeout(() => toast(`${b.icon} <b>${b.name}</b> unlock! +${b.reward} 🪙`, 3600), i * 700));
+  }
+
   const goTab = (t: Tab): void => (t === 'yatra' ? showMap() : t === 'multi' ? showMulti() : showKhel());
 
   // First screen: Yatra level map
   function showMap(): void {
     stop();
-    dispose = renderMap(root, profile, playLevel); // map ले scroll anusar theme afai badlinchha
+    dispose = renderMap(root, profile, playLevel, {
+      badgeText: badgeCount(profile),
+      onBadges: showBadges,
+      mountDaily: (el) => mountDaily(el, profile, () => { checkBadges(); showMapPills(); }),
+    }); // map ले scroll anusar theme afai badlinchha
+    renderNav(root, 'yatra', goTab, sound);
+  }
+
+  function showMapPills(): void {
+    document.querySelectorAll('.coinpill').forEach((e) => (e.textContent = `🪙 ${profile.coins}`));
+    const b = document.getElementById('badges');
+    if (b) b.textContent = `🏅 ${badgeCount(profile)}`;
+  }
+
+  function showBadges(): void {
+    stop();
+    applyTheme(null);
+    renderBadges(root, profile, showMap);
     renderNav(root, 'yatra', goTab, sound);
   }
 
   function showMulti(): void {
     stop();
     applyTheme(null);
-    dispose = renderMultiplayer(root, { platform, onExit: showMap });
+    dispose = renderMultiplayer(root, { platform, onExit: showMap, onGameEnd: (won) => { recordMultiplayer(profile, won); saveProfile(profile); checkBadges(); } });
     renderNav(root, 'multi', goTab, sound);
   }
 
@@ -64,12 +96,14 @@ async function boot(): Promise<void> {
     const firstClear = (profile.levels[i] ?? 0) === 0;
     const round = pickRound(i, Math.random, undefined, avoid); // random type, ya admin ne set gareko
     applyTheme(chapterOf(i), true); // thau ko accent + mathi ko background
-    const wallet = { coins: () => profile.coins, spend: (n: number) => { if (profile.coins < n) return false; profile.coins -= n; saveProfile(profile); return true; } };
-    const done = (stars: number, xp: number, coins: number): void => {
+    const wallet = { coins: () => profile.coins, spend: (n: number) => { if (profile.coins < n) return false; profile.coins -= n; recordPowerup(profile); saveProfile(profile); return true; } };
+    const done = (stars: number, xp: number, coins: number, kind: 'grid' | 'quiz' | 'photo' | 'rush'): void => {
       profile.levels[i] = Math.max(profile.levels[i] ?? 0, stars);
       profile.xp += xp;
       profile.coins += coins;
+      recordWin(profile, kind, stars);
       saveProfile(profile);
+      checkBadges();
     };
     const onNext = i + 1 < TOTAL_LEVELS ? () => playLevel(i + 1) : undefined;
     if (round.kind === 'grid') {
@@ -82,7 +116,7 @@ async function boot(): Promise<void> {
         onNext,
         onExit: showMap,
         wallet,
-        onFinish: ({ won, tries, xp, coins }) => { if (won) done(starsFor(tries), xp, coins); },
+        onFinish: ({ won, tries, xp, coins }) => { if (won) done(starsFor(tries), xp, coins, 'grid'); },
       });
       return;
     }
@@ -95,7 +129,7 @@ async function boot(): Promise<void> {
       onNext,
       onExit: showMap,
       wallet,
-      onFinish: ({ won, stars, xp, coins }) => { if (won) done(stars, xp, coins); },
+      onFinish: ({ won, stars, xp, coins }) => { if (won) done(stars, xp, coins, round.kind); },
     });
   }
 
@@ -111,6 +145,7 @@ async function boot(): Promise<void> {
         profile.xp += xp;
         if (mode === 'daily') recordDaily(profile, tries, won);
         saveProfile(profile);
+        checkBadges();
       },
     });
   }

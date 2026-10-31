@@ -17,6 +17,8 @@ export interface MpDeps {
   transport?: () => Transport;
   env?: Env;
   enabled?: boolean;
+  /** Khel sakiyo: tapai pahilo (barabar sahit) hunuhunthyo? */
+  onGameEnd?: (won: boolean) => void;
 }
 
 function savedName(): string {
@@ -30,6 +32,7 @@ export function renderMultiplayer(root: HTMLElement, deps: MpDeps): () => void {
   let busy = false;
   let notice = '';
   let tick = 0;
+  let reported = false;
   const myId = newPlayerId();
 
   const makeSession = (): Session => {
@@ -132,6 +135,7 @@ export function renderMultiplayer(root: HTMLElement, deps: MpDeps): () => void {
     }
     const top = rankPlayers(v.players);
     const mine = top.find((p) => p.id === myId);
+    if (!reported) { reported = true; deps.onGameEnd?.(mine?.rank === 1); }
     return `<h2 class="q">${mine && mine.rank === 1 ? '🏆 Tapai jitnu bhayo!' : 'Khel sakiyo'}</h2>${board(v.players)}<div class="after"><button id="again" class="primary">Feri</button></div>`;
   }
 
