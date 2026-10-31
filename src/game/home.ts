@@ -15,7 +15,6 @@ const LOGO = `<svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"
 const SOON = [
   { name: 'Yatra', note: '10 chapter, Everest Base Camp samma', tag: 'Chhito aauchha' },
   { name: 'Chitra Shabda', note: 'Photo + emoji bata shabda', tag: 'Chhito aauchha' },
-  { name: 'Top 10 board', note: '2-5 jana, points ko khel', tag: 'Pachhi' },
 ];
 
 export interface HomeActions {

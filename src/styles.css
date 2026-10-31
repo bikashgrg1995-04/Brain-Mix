@@ -168,3 +168,25 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .stars { font-size: 2rem; letter-spacing: 4px; color: var(--yellow); }
 .pts { font-weight: 700; margin-bottom: 6px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- Multiplayer ---------- */
+.mpform { display: grid; gap: 10px; margin: 12px 4px; }
+.mpform input { padding: 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 1.05rem; }
+.mpform .or { text-align: center; color: var(--muted); margin: 0; }
+.msg.warn { color: #b3261e; }
+@media (prefers-color-scheme: dark) { .msg.warn { color: #ff8a80; } }
+.roomcode { display: grid; justify-items: center; gap: 4px; margin: 14px 0 6px; }
+.roomcode small { color: var(--muted); }
+.roomcode b { font-size: 2.2rem; letter-spacing: .3em; padding-left: .3em; }
+.players { list-style: none; margin: 8px 4px; padding: 0; display: grid; gap: 6px; }
+.players li { display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 8px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--surface); }
+.players li.me { border-color: var(--accent); }
+.players li.gone { opacity: .5; }
+.players .rk { text-align: center; font-weight: 800; }
+.players em { font-style: normal; color: var(--green); font-weight: 700; font-size: .85rem; }
+.players .sc { font-weight: 800; min-width: 3ch; text-align: right; }
+.rushform { display: grid; gap: 8px; margin: 8px 4px; }
+.rw { display: grid; gap: 3px; }
+.rw label { font-size: .8rem; color: var(--muted); }
+.rw input { padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 1.05rem; letter-spacing: .12em; }
+.msg.wait { margin-top: 30px; }

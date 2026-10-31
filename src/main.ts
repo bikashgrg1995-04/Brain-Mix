@@ -4,6 +4,7 @@ import { dailyWord, renderHome, type Filter } from './game/home';
 import { renderMap } from './game/map';
 import { renderNav, type Tab } from './game/nav';
 import { mountRound } from './game/round-ui';
+import { renderMultiplayer } from './mp/ui';
 import { pickRound } from './game/rounds';
 import { mountGame, type GameOptions } from './game/ui';
 import { facebookAdapter } from './platform/facebook';
@@ -21,13 +22,20 @@ async function boot(): Promise<void> {
   let dispose: (() => void) | null = null;
   const stop = (): void => { dispose?.(); dispose = null; };
 
-  const goTab = (t: Tab): void => (t === 'yatra' ? showMap() : showKhel());
+  const goTab = (t: Tab): void => (t === 'yatra' ? showMap() : t === 'multi' ? showMulti() : showKhel());
 
   // First screen: Yatra level map
   function showMap(): void {
     stop();
     dispose = renderMap(root, profile, playLevel); // map ले scroll anusar theme afai badlinchha
     renderNav(root, 'yatra', goTab);
+  }
+
+  function showMulti(): void {
+    stop();
+    applyTheme(null);
+    dispose = renderMultiplayer(root, { platform, onExit: showMap });
+    renderNav(root, 'multi', goTab);
   }
 
   function showKhel(): void {

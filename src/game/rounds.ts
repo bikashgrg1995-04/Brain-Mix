@@ -76,15 +76,8 @@ function adminRound(level: number, quests: QuestFile): Round | null {
   return { kind: 'photo', id, admin: true, difficulty: q.difficulty, timer: q.timer ?? DEFAULT_TIMER.photo, emoji: q.emoji, answer: q.answer, category: place, hint: q.hint };
 }
 
-/**
- * Level (0-based) ko round. Admin quest bhaye tyahi (sadhai same). Natra random: type tauli anusar,
- * item level ko difficulty anusar. `avoid` = "Feri khel" ma aghilo jastai nadine.
- */
-export function pickRound(level: number, rng: Rng = Math.random, quests: QuestFile = QUESTS, avoid?: string): Round {
-  const fixed = adminRound(level, quests);
-  if (fixed) return fixed;
-  const d = difficultyFor(level);
-  const kind = pickKind(rng);
+/** Kind ra difficulty diyepachhi random item banaucha (admin quest bina). `avoid` = aghilo item id. */
+export function buildRound(kind: RoundKind, d: Difficulty, place: string, rng: Rng = Math.random, avoid?: string): Round {
   if (kind === 'quiz') {
     const q = pool(QUIZ_BANK, d, (t) => t.question, avoid);
     const item = q[rand(q.length, rng)]!;
@@ -97,7 +90,7 @@ export function pickRound(level: number, rng: Rng = Math.random, quests: QuestFi
   if (kind === 'photo') {
     const p = pool(PHOTO_BANK, d, (t) => t.answer, avoid);
     const item = p[rand(p.length, rng)]!;
-    return { kind, id: item.answer, admin: false, difficulty: item.difficulty, timer: DEFAULT_TIMER.photo, emoji: item.emoji, answer: item.answer, category: CHAPTERS[chapterOf(level)]!.place, hint: item.hint };
+    return { kind, id: item.answer, admin: false, difficulty: item.difficulty, timer: DEFAULT_TIMER.photo, emoji: item.emoji, answer: item.answer, category: place, hint: item.hint };
   }
   if (kind === 'rush') {
     // 5 alag shabda: tyo difficulty ko, kam bhaye najik difficulty bata.
@@ -111,4 +104,14 @@ export function pickRound(level: number, rng: Rng = Math.random, quests: QuestFi
   const g = pool(WORDS, d, (w) => w.answer, avoid);
   const word = g[rand(g.length, rng)]!;
   return { kind: 'grid', id: word.answer, admin: false, difficulty: word.difficulty, timer: DEFAULT_TIMER.word, word };
+}
+
+/**
+ * Level (0-based) ko round. Admin quest bhaye tyahi (sadhai same). Natra random: type tauli anusar,
+ * item level ko difficulty anusar. `avoid` = "Feri khel" ma aghilo jastai nadine.
+ */
+export function pickRound(level: number, rng: Rng = Math.random, quests: QuestFile = QUESTS, avoid?: string): Round {
+  const fixed = adminRound(level, quests);
+  if (fixed) return fixed;
+  return buildRound(pickKind(rng), difficultyFor(level), CHAPTERS[chapterOf(level)]!.place, rng, avoid);
 }
